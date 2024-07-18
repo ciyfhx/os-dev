@@ -7,6 +7,10 @@ void print(char* m){
     }
 }
 
+void read_disk(int lda, int nSectors, int driveNo, char* des){
+}
+
+
 extern "C" void main(){
     char* msg = "Hello World from C++!";
     print(msg);

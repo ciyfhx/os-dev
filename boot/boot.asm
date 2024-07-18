@@ -25,38 +25,172 @@ ebr_drive_number:           db 0                    ; 0x00 floppy, 0x80 hdd, use
                             db 0                    ; reserved
 ebr_signature:              db 29h
 ebr_volume_id:              db 12h, 34h, 56h, 78h   ; serial number, value doesn't matter
-ebr_volume_label:           db 'ZIHENG OS'          ; 11 bytes, padded with spaces
+ebr_volume_label:           db 'ZIHENG OS  '          ; 11 bytes, padded with spaces
 ebr_system_id:              db 'FAT12   '           ; 8 bytes
 
 
 start:
-    mov [BOOT_DISK], dl
-
     ; setup data segments
     xor	ax, ax				; null segments
 	mov	ds, ax
 	mov	es, ax
 
+    mov [BOOT_DISK], dl
+
     ; setup stack
     mov ss, ax
-	mov	bp, 0x8000			; stack begins at 0x8000-0xffff
+	mov	bp, 0xF000			; stack begins at 0xF000
 	mov	sp, bp
 
     mov ah, 0x0             ; text mode (clear screen)
     mov al, 0x3
     int 0x10
 
-    ; read kernel from disk
-    mov bx, KERNEL_LOCATION ; write kernel to this location (location = es * 16  + bx)
-    mov ax, 1               ; LBA=1, coorespond to the second sector
-    mov cl, 1               ; number of sectors
+    ; ; read kernel from disk
+    ; mov si, msg_read_kernel
+    ; call puts               
+
+    ; calculate file allocation table sector size (bdb_fat_count * bdb_sectors_per_fat) 
+    mov al, [bdb_fat_count]     
+    mov cx, [bdb_sectors_per_fat]
+    mul cx
+    ; calculate LBA of root directory
+    add ax, word [bdb_reserved_sectors]
+    push ax
+
+    ; calculate root directory sector size (bdb_dir_entries_count * 32 + bdb_bytes_per_sector - 1) / bdb_bytes_per_sector
+    mov ax, [bdb_dir_entries_count] ; 0x7c69
+    mov bx, [bdb_bytes_per_sector]
+    dec bx
+    shl ax, 5
+    add ax, bx
+    ; xor dx, dx
+    div word [bdb_bytes_per_sector]
+    push ax
+
+    ; read root directory
+    xor dx, dx
+    mov bx, buffer          ; write kernel to this location (location = es * 16  + bx) ;0x7c7b
+    mov ax, [bp - 2]        ; LBA address of root directory
+    mov cx, [bp - 4]        ; root directory sector size
     mov dl, [BOOT_DISK]     ; drive number
     call read_from_disk
-    
-    mov si, msg_boot_kernel
-    call puts
 
+    ; search kernel from root directory
+    ; compare two string buffers located at ds:si and es:di
+    xor bx, bx
+    mov di, buffer
+.search_kernel:
+    mov si, file_kernel_bin
+    mov cx, 11                          ; compare up to 11 characters
+    push di
+    repe cmpsb                          ; repeat until z-flag is triggered = 1
+    pop di
+    je .found_kernel                    ; copy kernel file content to KERNEL_LOCATION
+
+    add di, 32                          ; move to the next entry
+    inc bx                              
+    cmp bx, [bdb_dir_entries_count]
+    jl .search_kernel
+
+    ; kernel not found
+    jmp .kernel_not_found_error
+
+.kernel_not_found_error:
+    mov si, msg_kernel_not_found
+    call puts
+    hlt
+
+.found_kernel:
+    mov ax, [bp - 2]        ; LBA address of root directory
+    mov cx, [bp - 4]        ; root directory sector size
+    add ax, cx              ; LBA address of data
+    push ax
+
+    xor ax, ax
+    mov ax, [di + 26]       ; get cluster number
+    push ax
+
+    ; load FAT from disk into memory
+    xor dx, dx
+    mov bx, buffer
+    mov ax, [bdb_reserved_sectors]  ; LBA of fat
+    mov cl, [bdb_sectors_per_fat]   ; fat sector size
+    mov dl, [BOOT_DISK]
+    call read_from_disk
+
+
+
+    mov cx, KERNEL_LOCATION     ;7cc7
+.read_content_loop:
+    pop ax              ; cluster number
+    ; read cluster
+    mov si, [bp - 6]    ; LBA data
+    mov di, cx
+    call read_cluster
+    ; get next cluster
+    mov di, buffer  ;7cd3
+    push cx
+    call get_next_cluster
+    ; check if end of cluster
+    cmp cx, 0xFF8
+    mov ax, cx
+    pop cx
+    add cx, [bdb_bytes_per_sector]
+    jb .read_content_loop
+
+    ; boot kernel
+.boot_kernel:
     jmp KERNEL_LOCATION
+
+; Read the cluster
+; Parameters:
+;   - ax: cluster number
+;   - si: cluster data location
+;   - di: write destination
+;
+read_cluster:
+    pusha
+    mov bx, di
+    sub ax, 2
+    mul byte [bdb_sectors_per_cluster]
+    add ax, si
+    mov cl, [bdb_sectors_per_cluster]
+    mov dl, [BOOT_DISK]
+    call read_from_disk
+    popa
+    ret
+
+; Returns the next cluster from the FAT
+; Parameters:
+;   - ax: current cluster
+;   - di: pointer to fat buffer
+; Returns:
+;   - cx: next cluster
+;
+get_next_cluster:
+    push bx
+    push ax
+    mov bx, di
+    mov cx, 3
+    mul cx
+    shr ax, 1   ; ax * 3 / 2
+    mov si, ax
+    test ax, ax
+    mov ax, [bx + si]
+    jnz .done
+; .even:
+;     ror ax, 8
+;     jmp .done
+.odd:
+    shr ax, 4
+.done:
+    and ax, 0x0FFF
+    mov cx, ax
+    pop ax
+    pop bx
+    ret
+
 
 ; Prints a string to the screen
 ; Params:
@@ -127,15 +261,21 @@ lba_to_chs:
 ;   - es:bx: memory address where to store read data
 ;
 read_from_disk:
+    push bp
+    mov bp, sp
     push ax
-    push dx
     push es
     push bx
+    push dx
     push cx
 
     call lba_to_chs         ; convert lba to chs
-    pop ax                  ; pop the value of cx to ax
+    push dx
+    mov dx, [bp - 10]        ; sectors to read
     mov ah, 0x02            ; 0x02 = read from disk
+    mov al, dl
+    pop dx                  ; head number
+    mov dl, [bp - 8]        ; drive number
     mov di, 3
 .read:
     pusha                   ; push all registers
@@ -150,10 +290,8 @@ read_from_disk:
     jnz .read
     jmp floppy_error
 .done:
-    pop bx
-    pop es
-    pop dx
-    pop ax
+    mov sp, bp
+    pop bp
     ret
 
 ;
@@ -192,8 +330,11 @@ BOOT_DISK: db 0
 %define ENDL 0x0D, 0x0A
 
 ; strings
-msg_read_failed:        db 'Read from disk failed!', 0
-msg_boot_kernel:        db 'Booting into kernel', 0
+msg_read_failed:        db 'Read from disk failed!', ENDL, 0
+msg_kernel_not_found:   db 'Unable to find KERNEL BIN from root directory', ENDL, 0
+file_kernel_bin:        db 'KERNEL  BIN'
 
 times 510-($-$$) db 0              
 dw 0xaa55
+
+buffer:
