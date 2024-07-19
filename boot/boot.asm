@@ -30,12 +30,11 @@ ebr_system_id:              db 'FAT12   '           ; 8 bytes
 
 
 start:
+    mov [BOOT_DISK], dl
     ; setup data segments
     xor	ax, ax				; null segments
 	mov	ds, ax
 	mov	es, ax
-
-    mov [BOOT_DISK], dl
 
     ; setup stack
     mov ss, ax
@@ -44,34 +43,29 @@ start:
 
     mov ah, 0x0             ; text mode (clear screen)
     mov al, 0x3
-    int 0x10
-
-    ; ; read kernel from disk
-    ; mov si, msg_read_kernel
-    ; call puts               
+    int 0x10        
 
     ; calculate file allocation table sector size (bdb_fat_count * bdb_sectors_per_fat) 
     mov al, [bdb_fat_count]     
     mov cx, [bdb_sectors_per_fat]
     mul cx
-    ; calculate LBA of root directory
+    ; calculate LBA for root directory
     add ax, word [bdb_reserved_sectors]
-    push ax
+    push ax                 ; save LBA for root directory (bp - 2)
 
     ; calculate root directory sector size (bdb_dir_entries_count * 32 + bdb_bytes_per_sector - 1) / bdb_bytes_per_sector
-    mov ax, [bdb_dir_entries_count] ; 0x7c69
+    mov ax, [bdb_dir_entries_count]
     mov bx, [bdb_bytes_per_sector]
     dec bx
     shl ax, 5
     add ax, bx
-    ; xor dx, dx
     div word [bdb_bytes_per_sector]
-    push ax
+    push ax                 ; save root directory sector size (bp - 4)
 
-    ; read root directory
+    ; read root directory content
     xor dx, dx
-    mov bx, buffer          ; write kernel to this location (location = es * 16  + bx) ;0x7c7b
-    mov ax, [bp - 2]        ; LBA address of root directory
+    mov bx, buffer          ; write kernel to this location (location = es * 16  + bx)
+    mov ax, [bp - 2]        ; LBA root directory
     mov cx, [bp - 4]        ; root directory sector size
     mov dl, [BOOT_DISK]     ; drive number
     call read_from_disk
@@ -102,14 +96,14 @@ start:
     hlt
 
 .found_kernel:
-    mov ax, [bp - 2]        ; LBA address of root directory
+    mov ax, [bp - 2]        ; LBA root directory
     mov cx, [bp - 4]        ; root directory sector size
-    add ax, cx              ; LBA address of data
-    push ax
+    add ax, cx              ; LBA address for data
+    push ax                 ; save LBA for data (bp - 6)
 
     xor ax, ax
     mov ax, [di + 26]       ; get cluster number
-    push ax
+    push ax                 ; save cluster number on stack (bp - 8)
 
     ; load FAT from disk into memory
     xor dx, dx
@@ -119,24 +113,33 @@ start:
     mov dl, [BOOT_DISK]
     call read_from_disk
 
-
-
     mov cx, KERNEL_LOCATION     ;7cc7
+    push cx                 ; save kernel write desination (bp - 10)
+
+    ; calculate cluster byte size
+    mov ax, [bdb_bytes_per_sector]
+    xor cx, cx
+    mov cl, [bdb_sectors_per_cluster]
+    mul cx ;7cd4
+    push ax                 ; cluster byte size (bp - 12)
+
 .read_content_loop:
-    pop ax              ; cluster number
     ; read cluster
+    mov ax, [bp - 8]    ; cluster number
     mov si, [bp - 6]    ; LBA data
-    mov di, cx
+    mov di, [bp - 10]   ; kernel destination
     call read_cluster
+    ; update kernel destination
+    add di, [bp - 12]   ; should add bdb_bytes_per_sector * bdb_sectors_per_cluster
+    mov [bp - 10], di
+
     ; get next cluster
-    mov di, buffer  ;7cd3
-    push cx
+    mov di, buffer      ; FAT location 
     call get_next_cluster
     ; check if end of cluster
     cmp cx, 0xFF8
-    mov ax, cx
-    pop cx
-    add cx, [bdb_bytes_per_sector]
+    ; update cluster number
+    mov [bp - 8], cx
     jb .read_content_loop
 
     ; boot kernel
@@ -169,26 +172,29 @@ read_cluster:
 ;   - cx: next cluster
 ;
 get_next_cluster:
-    push bx
     push ax
+    push di
+    push bx
+    push bp
+    mov bp, sp
     mov bx, di
     mov cx, 3
     mul cx
     shr ax, 1   ; ax * 3 / 2
     mov si, ax
-    test ax, ax
     mov ax, [bx + si]
-    jnz .done
-; .even:
-;     ror ax, 8
-;     jmp .done
+    mov cx, [bp + 6]
+    test cl, 1
+    jz .done
 .odd:
     shr ax, 4
 .done:
     and ax, 0x0FFF
     mov cx, ax
-    pop ax
+    pop bp
     pop bx
+    pop di
+    pop ax
     ret
 
 
@@ -255,27 +261,21 @@ lba_to_chs:
 ;
 ; Reads sectors from a disk
 ; Parameters:
-;   - ax: LBA address
-;   - cl: number of sectors to read (up to 128)
-;   - dl: drive number
-;   - es:bx: memory address where to store read data
+;   - ax: LBA address 19
+;   - cl: number of sectors to read (up to 128) 14
+;   - dl: drive number 0
+;   - es:bx: memory address where to store read data 7e00
 ;
-read_from_disk:
-    push bp
+read_from_disk: ;7d65
+    pusha
     mov bp, sp
-    push ax
-    push es
-    push bx
-    push dx
-    push cx
-
     call lba_to_chs         ; convert lba to chs
     push dx
-    mov dx, [bp - 10]        ; sectors to read
+    mov dx, [bp + 12]       ; sectors to read
     mov ah, 0x02            ; 0x02 = read from disk
     mov al, dl
     pop dx                  ; head number
-    mov dl, [bp - 8]        ; drive number
+    mov dl, [bp + 10]       ; drive number
     mov di, 3
 .read:
     pusha                   ; push all registers
@@ -290,8 +290,7 @@ read_from_disk:
     jnz .read
     jmp floppy_error
 .done:
-    mov sp, bp
-    pop bp
+    popa
     ret
 
 ;
@@ -331,7 +330,7 @@ BOOT_DISK: db 0
 
 ; strings
 msg_read_failed:        db 'Read from disk failed!', ENDL, 0
-msg_kernel_not_found:   db 'Unable to find KERNEL BIN from root directory', ENDL, 0
+msg_kernel_not_found:   db 'Unable to find KERNEL BIN', ENDL, 0
 file_kernel_bin:        db 'KERNEL  BIN'
 
 times 510-($-$$) db 0              

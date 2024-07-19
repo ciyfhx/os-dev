@@ -23,6 +23,7 @@ ${BIN_DIR}/os.bin: ${BIN_DIR}/boot.bin ${BIN_DIR}/full_kernel.o
 	dd if=$< of=$@ conv=notrunc
 # copy the kernel binary into the file format
 	mcopy -i $@ $(word 2,$^) "::kernel.bin"
+# mcopy -i $@ "bin/paddedFile.bin" "::kernel.bin"
 
 ${BIN_DIR}/full_kernel.o: ${BIN_DIR}/kernel_entry.o ${OBJS_PATH}
 	i386-elf-ld -o $@ -Ttext 0x1000 $^ --oformat binary
