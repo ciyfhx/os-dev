@@ -5,12 +5,17 @@ OBJS = ${CPP_SOURCES:.cpp=.o}
 # replacement of parent directory 'kernel' to 'bin' 
 OBJS_PATH = $(patsubst kernel/%,bin/%,$(OBJS))
 
+ASM_SOURCES = $(wildcard kernel/kernel_asm/*.asm)
+ASM_OBJS = ${ASM_SOURCES:.asm=.o}
+ASM_OBJS_PATH = $(patsubst kernel/kernel_asm/%,bin/%,$(ASM_OBJS))
+
 CC = /usr/local/i386elfgcc/bin/i386-elf-gcc
 CXX = /usr/local/i386elfgcc/bin/i386-elf-g++
 GDB = /usr/local/i386elfgcc/bin/i386-elf-gdb
 
 # -g: debug flag -m32: 32bit object file
 CPPFLAGS = -g -m32
+LDFLAGS = -melf_i386 
 
 BIN_DIR=bin
 
@@ -23,13 +28,15 @@ ${BIN_DIR}/os.bin: ${BIN_DIR}/boot.bin ${BIN_DIR}/full_kernel.o
 	dd if=$< of=$@ conv=notrunc
 # copy the kernel binary into the file format
 	mcopy -i $@ $(word 2,$^) "::kernel.bin"
-# mcopy -i $@ "bin/paddedFile.bin" "::kernel.bin"
 
-${BIN_DIR}/full_kernel.o: ${BIN_DIR}/kernel_entry.o ${OBJS_PATH}
-	i386-elf-ld -o $@ -Ttext 0x1000 $^ --oformat binary
+${BIN_DIR}/full_kernel.o: ${BIN_DIR}/kernel_entry.o ${ASM_OBJS_PATH} ${OBJS_PATH} 
+	i386-elf-ld ${LDFLAGS} -o $@ -Ttext 0x1000 $^ --oformat binary
 
 ${BIN_DIR}/%.o: kernel/%.cpp ${HEADERS}
 	${CXX} ${CPPFLAGS} -ffreestanding  -c $< -o $@
+
+${BIN_DIR}/%.o: kernel/kernel_asm/%.asm
+	nasm $< -f elf -o $@
 
 ${BIN_DIR}/%.o: boot/%.asm
 	nasm $< -f elf -o $@
