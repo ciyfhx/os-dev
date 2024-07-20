@@ -13,6 +13,9 @@ start_protected_mode:
 	mov ax, DATA_SEG
 	mov ds, ax
 	mov ss, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
 
     ; Set up stack
     mov ebp, 0x90000
@@ -21,7 +24,7 @@ start_protected_mode:
     jmp _main
 
 _main:
-    mov si, welcomeMsg 
+    ; mov si, welcomeMsg 
     ; call print
     ; push byte 'A'
     ; call write_char
