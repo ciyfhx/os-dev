@@ -14,7 +14,7 @@ CXX = /usr/local/i386elfgcc/bin/i386-elf-g++
 GDB = /usr/local/i386elfgcc/bin/i386-elf-gdb
 
 # -g: debug flag -m32: 32bit object file
-CPPFLAGS = -g -m32
+CPPFLAGS = -g -m32 -fvar-tracking
 LDFLAGS = -melf_i386 
 
 BIN_DIR=bin
@@ -44,12 +44,11 @@ ${BIN_DIR}/%.o: boot/%.asm
 ${BIN_DIR}/%.bin: boot/%.asm
 	nasm $< -f bin -o $@
 
-${BIN_DIR}/full_kernel.elf: ${BIN_DIR}/kernel_entry.o ${OBJS_PATH}
+${BIN_DIR}/full_kernel.elf: ${BIN_DIR}/kernel_entry.o ${ASM_OBJS_PATH} ${OBJS_PATH}
 	i386-elf-ld -o $@ -Ttext 0x1000 $^ 
 
 
 debug: ${BIN_DIR}/os.bin ${BIN_DIR}/full_kernel.elf
-	bochs -f bochs_config
 
 
 clean:

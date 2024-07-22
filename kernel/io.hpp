@@ -19,5 +19,14 @@ extern "C" {
     unsigned char inb(unsigned short port);
 }
 
+/**
+ * Introduce a small amount of wait time 1-4ms
+ */
+static inline void io_wait(void)
+{
+    outb(0x80, 0);
+}
+
+
 #endif /* INCLUDE_IO_H */
     
