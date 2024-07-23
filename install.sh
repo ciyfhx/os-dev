@@ -25,7 +25,7 @@ echo "Download source from $BINUTILS_URL$BINUTILS_VERSION.tar.xz"
 curl -O "$BINUTILS_URL$BINUTILS_VERSION.tar.xz"
 tar xf "$BINUTILS_VERSION.tar.xz"
 mkdir binutils-build && cd binutils-build
-./$BINUTILS_VERSION/configure --target=$TARGET --enable-interwork --enable-multilib --disable-nls --disable-werror --prefix=$PREFIX 2>&1 | tee configure.log
+../$BINUTILS_VERSION/configure --target=$TARGET --enable-interwork --enable-multilib --disable-nls --disable-werror --prefix=$PREFIX 2>&1 | tee configure.log
 sudo make all install 2>&1 | tee make.log
 
 # compile gcc

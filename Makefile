@@ -14,7 +14,7 @@ CXX = /usr/local/i386elfgcc/bin/i386-elf-g++
 GDB = /usr/local/i386elfgcc/bin/i386-elf-gdb
 
 # -g: debug flag -m32: 32bit object file
-CPPFLAGS = -g -m32 -fvar-tracking
+CPPFLAGS = -g -m32 -fvar-tracking -B/usr/local/i386elfgcc/bin/
 LDFLAGS = -melf_i386 
 
 BIN_DIR=bin
