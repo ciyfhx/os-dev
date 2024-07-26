@@ -39,7 +39,7 @@ curl -O "$GCC_URL/$GCC_VERSION/$GCC_VERSION.tar.gz"
 tar xf "$GCC_VERSION.tar.gz"
 mkdir gcc-build && cd gcc-build
 echo Configure: . . . . . . .
-../$GCC_VERSION/configure --target=$TARGET --prefix="$PREFIX" --disable-nls --disable-libssp --enable-language=c,c++ --without-headers
+../$GCC_VERSION/configure --target=$TARGET --prefix="$PREFIX" --disable-nls --disable-libssp --enable-language=c,c++ --without-headers --disable-hosted-libstdcxx
 echo MAKE ALL-GCC:
 sudo make all-gcc
 echo MAKE ALL-TARGET-LIBGCC:
@@ -48,6 +48,12 @@ echo MAKE INSTALL-GCC:
 sudo make install-gcc
 echo MAKE INSTALL-TARGET-LIBGCC:
 sudo make install-target-libgcc
+
+echo MAKE ALL-TARGET-LIBSTDC++:
+sudo make all-target-libstdc++-v3 
+echo MAKE INSTALL-TARGET-LIBSTDC++:
+sudo make install-target-libstdc++-v3
+
 echo Location of installed gcc:
 
 # update path

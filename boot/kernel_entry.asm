@@ -2,6 +2,12 @@ global _start
 [bits 16]
 _start:
     cli ; clear interrupt flag
+    xor     ax, ax ; reset segment registers to match kernel location
+    mov     ds, ax
+    mov     es, ax
+    mov     fs, ax
+    mov     gs, ax
+
     ; Setup the GDT
     lgdt [GDT_descriptor]
     mov eax, cr0
@@ -24,6 +30,9 @@ protected_mode:
     mov esp, ebp
 
     jmp _main
+    
+paging:
+    
 
 _main:
     ; mov si, welcomeMsg 

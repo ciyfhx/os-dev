@@ -7,7 +7,12 @@ CPPFLAGS = -Wall -g -std=c++17
 
 BIN_DIR=bin
 
-${BIN_DIR}/fat12: fat12.cpp
+all: ${BIN_DIR}/gpt ${BIN_DIR}/fat32
+
+${BIN_DIR}/gpt: gpt.cpp
+	${CXX} ${CPPFLAGS} $< -o $@
+
+${BIN_DIR}/fat32: fat32.cpp
 	${CXX} ${CPPFLAGS} $< -o $@
 
 ${BIN_DIR}/%.o: ${OBJS}
