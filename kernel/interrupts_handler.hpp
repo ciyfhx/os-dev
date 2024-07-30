@@ -5,7 +5,7 @@ extern "C" {
     /**
      * Load the IDT address
      */
-    void load_idt(unsigned int idt_address);
+    void load_idt(uint32_t idt_address);
 }
 
 

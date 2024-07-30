@@ -1,4 +1,4 @@
-megs: 128
+megs: 2048
 romimage: file=/usr/share/bochs/BIOS-bochs-legacy
 vgaromimage: file=/usr/share/bochs/VGABIOS-lgpl-latest
 ata0-master: type=disk, path=./bin/os.img, mode=flat, cylinders=1024, heads=4, spt=32

@@ -28,7 +28,7 @@ void pic_remap(int offset1, int offset2)
 	outb(PIC1_PORT_DATA, 0xFD);   // Enable keyboard mask
 	outb(PIC2_PORT_DATA, 0xFF);
 
-	asm("sti"); // Eanble interrupt
+	asm("sti"); // Enable interrupt
 }
 
 

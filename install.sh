@@ -10,8 +10,8 @@ sudo apt install libmpc-dev -y
 sudo apt install libmpfr-dev -y
 sudo apt install texinfo -y
 
-export PREFIX="/usr/local/i386elfgcc" # install location
-export TARGET=i386-elf # targeted platform
+export PREFIX="/usr/local/x86_64elfgcc" # install location
+export TARGET=x86_64-elf # targeted platform
 export PATH="$PREFIX/bin:$PATH" # binary location
 
 # compile binutils

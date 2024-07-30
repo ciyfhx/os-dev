@@ -1,7 +1,7 @@
 [bits 16]
 [org 0x0000]
 
-KERNEL_LOADER_LOCATION equ 0x01000
+KERNEL_LOADER_LOCATION equ 0x1000 ; relative to 0x7C00
 FAT32_HEADER_SIZE      equ start - 3
 
 ; FAT32  header 
@@ -335,8 +335,8 @@ wait_key_and_reboot:
 
 ; strings
 msg_read_failed:               db 'Read disk failed!', ENDL, 0
-msg_kernel_loader_not_found:   db 'Unable to find KERNEL', ENDL, 0
-file_kernel_loader_bin:        db 'KERNEL  BIN'
+msg_kernel_loader_not_found:   db 'Unable to find LOADER', ENDL, 0
+file_kernel_loader_bin:        db 'LOADER  BIN'
 
 times 510-($-$$) db 0              
 dw 0xaa55

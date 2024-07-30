@@ -7,7 +7,9 @@ CPPFLAGS = -Wall -g -std=c++17
 
 BIN_DIR=bin
 
-all: ${BIN_DIR}/gpt ${BIN_DIR}/fat32
+all: ${BIN_DIR}/gpt ${BIN_DIR}/fat32 ${BIN_DIR}/test
+${BIN_DIR}/test: test.cpp
+	${CXX} ${CPPFLAGS} $< -o $@
 
 ${BIN_DIR}/gpt: gpt.cpp
 	${CXX} ${CPPFLAGS} $< -o $@

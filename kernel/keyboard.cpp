@@ -40,7 +40,7 @@ unsigned char read_scan_code(void){
 }
 
 void register_keyboard_interrupt(){
-    interrupts_init_descriptor(KBD_IRQ, (unsigned int) INTERRUPT_HANDLER_FUNC(KBD_IRQ));
+    interrupts_init_descriptor(KBD_IRQ, (uint64_t) INTERRUPT_HANDLER_FUNC(KBD_IRQ));
 
     interrupts_register_callback(KBD_IRQ, [](){
         char buf[2];
