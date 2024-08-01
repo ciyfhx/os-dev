@@ -30,8 +30,8 @@ extern "C" int kernel_loader_main(){
             auto* kernelBin = fat32.findKernelBin();
             
             fat32.readFileContent(kernelBin, +[](uint8_t* buf, uint32_t offset, uint32_t size){
-                //Load into memory location at 0xD100000
-                void* kernelLoc = (void*) 0xD100000;
+                //Load into physical memory location at 0x200000 but will page to 0xC0100000
+                void* kernelLoc = (void*) 0x200000;
                 memcpy(kernelLoc + offset, buf, size);
             });
 

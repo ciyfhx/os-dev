@@ -187,6 +187,7 @@ public:
             removeBlock(cur_alloc_block->next);
         }
     }
+
 };
 
 #endif /* INCLUDE_LIST_H */

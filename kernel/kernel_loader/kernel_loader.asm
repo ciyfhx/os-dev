@@ -1,4 +1,4 @@
-KERNEL_LOCATION equ 0xD100000
+KERNEL_LOCATION equ 0x00000000C0100000
 
 global _start
 [bits 16]
@@ -31,6 +31,7 @@ protected_mode:
     mov ebp, 0x90000
     mov esp, ebp
 
+
     ; read kernel from disk
     [extern kernel_loader_main]
     call kernel_loader_main
@@ -38,8 +39,9 @@ protected_mode:
     call check_cpu_id
     call check_long_mode
 
-    mov eax, 0x1A0000
-    mov cr3, eax
+    ; setup temporary paging to enable long mode (the actual paging will be setup by the kernel)
+    ; mov eax, 0x1A0000
+    ; mov cr3, eax
     mov eax, cr4                 ; Set the A-register to control register 4.
     or eax, 1 << 5               ; Set the PAE-bit, which is the 6th bit (bit 5).
     mov cr4, eax                 ; Set control register 4 to the A-register.
@@ -110,7 +112,8 @@ check_cpu_id:
     
 [bits 64]
 _main:
-    jmp KERNEL_LOCATION
+    mov rax, qword KERNEL_LOCATION
+    jmp rax
     jmp $
     ; hlt
 

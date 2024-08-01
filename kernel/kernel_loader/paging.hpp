@@ -2,6 +2,15 @@
 #define INCLUDE_PAGING_H
 
 #include <cstdint>
+#include <type_traits>
+#include "frame_allocator.hpp"
+#include "mem_allocator.hpp"
+#include "basic_io.hpp"
+
+#define PAGE_SIZE 0x1000
+#define PAGE_MAX_ENTRIES 512
+#define PAGE_ENTRY_SIZE 8
+
 
 typedef struct _PML4E
 {
@@ -102,6 +111,126 @@ typedef struct _PTE
 } PTE, *PPTE;
 
 extern "C" void setup_paging();
+
+
+typedef struct PagingInfo {
+    uint64_t virtualRamSize;
+    uint64_t physicalRamSize;
+    PPML4E rootTablePhysicalAddress;
+    PPML4E rootTableVirtualAddress;
+    bool pagingEnabled = false;
+};
+
+template <typename Page>
+concept IsPage = requires (Page page) {
+    std::bool_constant<std::is_same_v<Page, PTE> || std::is_same_v<Page, PPDE> || std::is_same_v<Page, PPDPTE> || std::is_same_v<Page, PPML4E>>::value;
+};
+
+class Paging {
+private: 
+
+    PagingInfo* pagingInfo;
+    FrameAllocator* frameAllocator;
+
+    template <typename PageParentTable, typename PageChildTable, typename Index>
+    requires IsPage<PageParentTable> && IsPage<PageChildTable> && std::is_integral_v<Index>
+    auto* getPageTable(PageParentTable* table, Index index){    
+        auto* entry = &table[index];
+        //If not exist we create one
+        if(!entry->Present){
+            entry->Present = true;
+            entry->ReadWrite = true;
+            auto frameNo = frameAllocator->findFrame();
+            entry->PageFrameNumber = frameNo;
+            auto frameAddress = frameNo * PAGE_SIZE;
+            memclr((uint64_t*)frameAddress, PAGE_SIZE);
+            frameAllocator->setFrame(frameAddress);
+            return (PageChildTable*)frameAddress;
+        }else{
+            auto frameNo = entry->PageFrameNumber;
+            auto frameAddress = frameNo * PAGE_SIZE;
+            return (PageChildTable*)frameAddress;
+        }
+
+    }
+
+    void memclr(uint64_t* dest, uint64_t size){
+        for (uint64_t i = 0; i < size; i++)
+        {
+            dest[i] = 0;
+        }
+    }
+
+
+    PPML4E getRootTable() {return (PPML4E) (!pagingInfo->pagingEnabled ? pagingInfo->rootTablePhysicalAddress : pagingInfo->rootTableVirtualAddress);}
+
+public:
+    Paging(uint64_t physicalRam, uint64_t virtualRam){
+        pagingInfo = new PagingInfo;
+        pagingInfo->physicalRamSize = physicalRam;
+        pagingInfo->virtualRamSize = virtualRam;
+
+        frameAllocator = new FrameAllocator(physicalRam);
+    }
+    ~Paging(){
+        delete pagingInfo;
+        delete frameAllocator;
+    }
+
+    FrameAllocator* getFrameAllocator() {
+        return frameAllocator;
+    }
+
+    void initPage(){
+        auto frameNo = frameAllocator->findFrame();
+        auto frameAddress = frameNo * PAGE_SIZE;
+        frameAllocator->setFrame(frameAddress);
+        pagingInfo->rootTablePhysicalAddress = frameAddress;
+        //Setup PML4T
+        memclr((uint64_t*)pagingInfo->rootTablePhysicalAddress, PAGE_SIZE);
+    }
+
+    void mapVirtualPageToPhysicalFrame(uint64_t vPage, uint64_t pFrame){
+        uint32_t pageTableEntry = vPage % PAGE_MAX_ENTRIES;
+        uint32_t pageDirectoryTableEntry = vPage / PAGE_MAX_ENTRIES % PAGE_MAX_ENTRIES;
+        uint32_t pageDirectoryPointerTableEntry = vPage / (PAGE_MAX_ENTRIES * PAGE_MAX_ENTRIES) % PAGE_MAX_ENTRIES;
+        uint32_t pml4PageTableEntry = vPage / (PAGE_MAX_ENTRIES * PAGE_MAX_ENTRIES * PAGE_ENTRY_SIZE) % PAGE_MAX_ENTRIES;
+
+        PPDPTE pageDirectoryPointerTable = getPageTable<PML4E, PDPTE>(getRootTable(), pml4PageTableEntry);
+        PPDE pageDirectoryTable = getPageTable<PDPTE, PDE>(pageDirectoryPointerTable, pageDirectoryPointerTableEntry);
+        PPTE pageTable = getPageTable<PDE, PTE>(pageDirectoryTable, pageDirectoryTableEntry);
+
+        if(pageTable[pageTableEntry].Present){
+            panic("Page already been mapped");
+        }
+        pageTable[pageTableEntry].Present = true;
+        pageTable[pageTableEntry].ReadWrite = true;
+        pageTable[pageTableEntry].PageFrameNumber = pFrame;
+    }
+
+    void unmapVirtualToPhysicalFrame(std::size_t vPage){
+        uint64_t pageTableEntry = vPage % PAGE_MAX_ENTRIES;
+        uint64_t pageDirectoryTableEntry = vPage / PAGE_MAX_ENTRIES;
+        uint64_t pageDirectoryPointerTableEntry = vPage / (PAGE_MAX_ENTRIES * PAGE_MAX_ENTRIES);
+        uint64_t pml4PageTableEntry = vPage / (PAGE_MAX_ENTRIES * PAGE_MAX_ENTRIES * PAGE_ENTRY_SIZE);
+
+        PPDPTE pageDirectoryPointerTable = getPageTable<PML4E, PDPTE>(getRootTable(), pml4PageTableEntry);
+        PPDE pageDirectoryTable = getPageTable<PDPTE, PDE>(pageDirectoryPointerTable, pageDirectoryPointerTableEntry);
+        PPTE pageTable = getPageTable<PDE, PTE>(pageDirectoryTable, pageDirectoryTableEntry);
+
+        pageTable[pageTableEntry].Present = 0;
+        frameAllocator->clearFrame(pageTable[pageTableEntry].PageFrameNumber * PAGE_SIZE);
+    }
+
+    void setCR3Register(){
+        asm volatile("mov %0, %%cr3":: "r"(pagingInfo->rootTablePhysicalAddress));
+        // u32int cr0;
+        // asm volatile("mov %%cr0, %0": "=r"(cr0));
+        // cr0 |= 0x80000000; // Enable paging!
+        // asm volatile("mov %0, %%cr0":: "r"(cr0));
+    }
+
+};
 
 #endif /* INCLUDE_PAGING_H */
     
